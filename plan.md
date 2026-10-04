@@ -1,14 +1,15 @@
 # Plan de Ruta — English Tutor Local AI
 
 > Rama: `plan-roadmap` (creada desde `develop`).
-> Fuente de requisitos: `README.md`. Reglas de proceso: `AGENTS.md`.
-> Regla de oro: **no avanzar al siguiente paso hasta que el verificador del paso actual pase y el commit esté creado.**
+> Fuente de requisitos: `README.md` en su versión local sin commitear. Reglas de proceso: `AGENTS.md` en su versión local sin commitear.
+> Este plan refleja ambas versiones locales; su commit queda pendiente en el Paso 0.
+> Regla de oro: **no avanzar al siguiente paso hasta que el verificador pase, el diff esté inspeccionado y el commit esté creado.**
 
 ---
 
 ## Estado actual verificado (inicio de esta rama)
 
-- `README.md` y `AGENTS.md` modificados sin commitear.
+- `README.md` y `AGENTS.md` modificados sin commitear (son las versiones con las que se escribió este plan).
 - Existe un esqueleto FastAPI no commiteado: `server/main.py`, `server/database/database.py`, `server/models/base.py`, `server/models/conversation.py`.
 - `server/models/` está ignorado por `.gitignore` (`models/` línea 26) → los modelos **no se están trackeando**. Bug a corregir en Paso 0.
 - `server/database/database.py` contiene código duplicado (engine/`get_db`/`init_db` definidos dos veces) y hacks `importlib` porque faltan `__init__.py` en `server/database/`.
@@ -20,10 +21,44 @@
 ## Reglas del plan
 
 1. Un paso = un commit verificado.
-2. El verificador de cada paso debe ejecutarse **realmente**; no se reporta "pasó" sin ejecutarlo.
-3. Si un paso revela una decisión arquitectónica no documentada → parar y pedir aprobación humana (AGENTS.md → Human approval).
-4. Si el paso crece mucho más de lo previsto → parar y crear `docs/handoff.md`.
-5. No implementar nada de un paso futuro "por si acaso".
+2. **Checklist de cada paso** (AGENTS.md → Milestones):
+
+   *Antes de empezar:*
+   1. Inspeccionar el estado real: `git status` + `git log --oneline -5`.
+   2. Leer en `README.md` la sección de requisitos del paso.
+   3. Definir los archivos mínimos que toca.
+   4. Si hay ambigüedad o decisión arquitectónica → parar y pedir aprobación humana.
+
+   *Al terminar:*
+   1. Ejecutar el verificador **realmente**; sin ejecutarlo el paso no está terminado.
+   2. Inspeccionar `git diff`: confirmar que no entran cambios no relacionados.
+   3. Si el verificador revela warnings/errores introducidos por el paso → resolverlos antes de cerrar.
+   4. Reportar qué se implementó y cómo se verificó.
+   5. Un commit coherente por paso. No commitear trabajo incompleto ni archivos generados (`data/*.db`, `server.log`, `__pycache__`, modelos locales, credenciales). No reescribir historia.
+
+3. Verificación: preferir la automatizada (`pytest`); todo endpoint nuevo se prueba con peticiones reales (`curl`); todo cambio de BD verifica que la app inicializa e interactúa con la BD. No ocultar problemas sin resolver; si algo no se pudo verificar, decirlo explícitamente.
+4. No inferir requisitos no documentados. El `Data Model Direction` del README es conceptual: **no** crear tablas porque aparezcan en ese diagrama, solo las que el paso actual necesita.
+5. Sin autenticación en ningún paso salvo petición explícita, y sin servicios cloud: todo local (README + AGENTS → Project-specific principles).
+6. Si un paso revela una decisión arquitectónica no documentada → parar y pedir aprobación (AGENTS.md → Human approval: esquema, dependencias mayores, persistencia, seguridad, servicios externos).
+7. Si el paso crece mucho más de lo previsto → parar y proponer revisarlo; crear `docs/handoff.md` solo si el contexto debe transferirse a otra sesión (el handoff es un documento de transición, no un duplicado del historial).
+8. No implementar nada de un paso futuro "por si acaso": sin tablas, endpoints, modelos ni abstracciones especulativas.
+9. Si una decisión futura relevante aparece, documentarla en el reporte/handoff, no implementarla.
+
+---
+
+## Servidores y entorno (AGENTS.md → Development environment / servers)
+
+- Windows 11 + Git Bash/MINGW64: no asumir utilidades Unix (`pkill`, `fuser`).
+- Antes de arrancar servidor: comprobar que el puerto 8000 no está ya en uso; reutilizar una instancia que responda bien; no arrancar duplicados ni cambiar de puerto en silencio.
+- Para terminar un proceso: identificar el PID y usar `MSYS_NO_PATHCONV=1 taskkill /PID <PID> /F`.
+- Nunca reportar un servidor como detenido sin haberlo verificado.
+
+---
+
+## Orden y estructura
+
+- El orden sigue la secuencia de hitos de `README.md` (Development Philosophy). Una adaptación: el frontend (Paso 11) va antes que Whisper/audio porque WebRTC + PeerJS vive en el navegador y no se puede verificar sin cliente.
+- Estructura objetivo del README: cuando los endpoints superen `server/main.py`, moverlos a `server/api/`; la lógica de plan/progreso va en `server/learning/`. No crear esos directorios hasta que un paso los necesite (no estructura vacía).
 
 ---
 
@@ -45,10 +80,12 @@
 ```bash
 git check-ignore server/models/conversation.py   # debe fallar (no ignorado)
 python -c "from server.main import app; print('import ok')"
+# comprobar puerto libre antes de arrancar (o reutilizar el servidor si ya responde)
 python -m uvicorn server.main:app --port 8000 &
 curl -s http://localhost:8000/                    # {"status":"ok",...}
 curl -s http://localhost:8000/api/conversations   # [] o JSON válido
 git status --short                                # sin archivos generados
+git diff HEAD --stat                              # diff revisado: solo cambios del paso
 ```
 
 ---
@@ -73,13 +110,13 @@ python -m pytest -q    # todos los tests en verde, 0 warnings nuevos
 
 ## Paso 2 — Modelo Learner + API de learners
 
-**Objetivo:** soportar múltiples learners con datos independientes (sin autenticación).
+**Objetivo:** soportar múltiples learners con datos independientes, mediante selección local de learner y **sin autenticación** (README → Learners).
 
 **Tareas:**
 
 - `server/models/learner.py`: `Learner` (id, name, created_at).
 - Endpoints: `POST /api/learners`, `GET /api/learners`, `GET /api/learners/{id}` (404 si no existe).
-- Tests: crear 2 learners, verificar aislamiento de ids.
+- Tests: crear 2 learners, verificar que cada uno tiene su identidad independiente.
 
 **Verificador:**
 
@@ -140,8 +177,8 @@ curl -s http://localhost:8000/llm/health          # modelo listado o error contr
 **Tareas:**
 
 - `POST /api/conversations/{id}/tutor-reply`: guarda el mensaje del learner, llama al LLM, guarda la respuesta del tutor, devuelve ambos.
-- Contexto: usar los mensajes previos de la conversación.
-- Tests con cliente LLM simulado (sin dependencia de red en CI).
+- Contexto: los mensajes conservan suficiente información para reconstruir la conversación (README → Conversations).
+- Tests con cliente LLM simulado (sin dependencia de red).
 
 **Verificador:**
 
@@ -159,7 +196,8 @@ curl -s -X POST http://localhost:8000/api/conversations/1/tutor-reply -H "Conten
 
 **Tareas:**
 
-- `server/llm/prompt.py`: construye el system prompt con nivel actual, meta y objetivo del learner (usan campos aún no persistidos → usar valores por defecto documentados hasta el Paso 8).
+- `server/llm/prompt.py`: construye el system prompt con nivel actual, meta y objetivo del learner (campos aún no persistidos → valores por defecto documentados hasta el Paso 8).
+- La estrategia se adapta al nivel y la meta del learner; distintos learners pueden recibir distinta estrategia, temas y dificultad (README → Pedagogical Principles).
 - Aplicar el prompt en el Paso 5.
 - Test: el prompt incluye nivel/meta; test de que no se rompe si el learner no tiene meta.
 
@@ -178,7 +216,7 @@ python -m pytest -q
 
 **Tareas:**
 
-- Modelo `Assessment` + `assessment_items` (learner_id, pregunta, respuesta, resultado).
+- Modelo `Assessment` + `assessment_items` (learner_id, pregunta, respuesta, resultado): el assessment pertenece a un learner y no se comparte entre learners.
 - `POST /api/assessments/{id}/answer`: la siguiente pregunta se decide según respuestas anteriores (adaptativa, vía LLM).
 - `POST /api/assessments/{id}/finish`: devuelve nivel estimado A1–C2, fortalezas, debilidades, confianza, **con aviso explícito de que no es certificación oficial**.
 - Tests con LLM simulado: ramas de dificultad ascendente/descendente.
@@ -198,7 +236,7 @@ python -m pytest -q
 
 **Tareas:**
 
-- Campos en `Learner`: `current_level`, `target_level`, `goal_type`.
+- Campos en `Learner`: `current_level`, `target_level`, `goal_type` — pertenecen al contexto del learner, no a ajustes globales de la aplicación (README → Learning Goal).
 - `PATCH /api/learners/{id}` limitado a esos campos, validando pares válidos (A1→A2 … C1→C2).
 - Reemplazar los valores por defecto del Paso 6 por los campos reales.
 - Tests de validación de pares inválidos (p. ej. C2→A1 rechazado o documentado).
@@ -260,8 +298,8 @@ curl -s http://localhost:8000/api/learners/1/progress
 **Tareas:**
 
 - Scaffold en `client/` (Vite + React + TS), proxy a `localhost:8000`.
-- Pantallas: selección/creación de learner, lista y detalle de conversación, chat de texto, vista de nivel/meta/plan.
-- **No** incluir audio todavía.
+- Pantallas: selección/creación de learner (local, sin login), lista y detalle de conversación, chat de texto, vista de nivel/meta/plan.
+- **No** incluir audio todavía (el audio llega en el Paso 13).
 
 **Verificador:**
 
@@ -332,7 +370,9 @@ python -m pytest -q
 
 ## Paradas obligatorias (AGENTS.md)
 
-- Al terminar cada paso: reportar, commitear, **parar**.
-- Decisión arquitectónica nueva (esquema, dependencia mayor, tecnología del README) → parar y preguntar.
-- Dos fallos seguidos del mismo verificador → parar e investigar sin tocar código no relacionado.
-- Contexto de sesión saturado → `docs/handoff.md` y parar.
+- Al terminar cada paso: ejecutar el checklist completo (verificador → `git diff` → reporte → commit) y **parar**; no continuar automáticamente al siguiente.
+- Decisión arquitectónica nueva (esquema, dependencia mayor, persistencia, seguridad/auth, tecnología del README, servicios externos) → parar y pedir aprobación.
+- Dos fallos seguidos del mismo verificador → documentar el problema y parar, sin tocar código no relacionado.
+- Si el paso revela que su definición es insuficiente → proponer un milestone revisado en lugar de expandir alcance en silencio.
+- Contexto de sesión saturado o poco fiable → `docs/handoff.md` y parar (una sesión limpia es preferible a un razonamiento degradado).
+- Milestone completado y sin contexto que transferir → no hace falta handoff.
