@@ -10,11 +10,10 @@
 ## Estado actual verificado (inicio de esta rama)
 
 - `README.md` y `AGENTS.md` modificados sin commitear (son las versiones con las que se escribió este plan).
-- Existe un esqueleto FastAPI no commiteado: `server/main.py`, `server/database/database.py`, `server/models/base.py`, `server/models/conversation.py`.
-- `server/models/` está ignorado por `.gitignore` (`models/` línea 26) → los modelos **no se están trackeando**. Bug a corregir en Paso 0.
-- `server/database/database.py` contiene código duplicado (engine/`get_db`/`init_db` definidos dos veces) y hacks `importlib` porque faltan `__init__.py` en `server/database/`.
+- **No hay código Python en el repo**: solo `.gitignore`, `README.md`, `AGENTS.md`, `plan.md`. El esqueleto `server/` que existió fue eliminado del working tree; el plan parte de cero.
+- `.gitignore` contiene `models/` (línea 26) que ignoraría `server/models/` en cuanto exista. Bug a corregir en Paso 0.
 - No hay `requirements.txt`, ni tests, ni `client/`, ni learner en el modelo de datos.
-- `data/english-tutor.db` y `server.log` generados localmente.
+- `data/english-tutor.db` es un residuo local (ya ignorado por `data/*.db`); se puede borrar sin más.
 
 ---
 
@@ -62,29 +61,28 @@
 
 ---
 
-## Paso 0 — Consolidar la base del repositorio
+## Paso 0 — Repositorio limpio + arranque FastAPI y SQLite
 
-**Objetivo:** que el código existente sea importable, testeable y commiteable de forma limpia.
+**Objetivo:** partir de una base importable, testeable y commiteable (README → hitos "Initialize FastAPI" y "Configure SQLAlchemy + SQLite").
 
 **Tareas:**
 
-- Corregir `.gitignore`: cambiar `models/` por `/models/` para que deje de ignorar `server/models/`; añadir `server.log`.
-- Eliminar el código duplicado de `server/database/database.py` (una sola definición de engine/`get_db`/`init_db`).
-- Eliminar los hacks `importlib` de `server/main.py` y `server/database/database.py`; añadir `__init__.py` faltantes (`server/database/__init__.py`, `server/models/__init__.py`); borrar el `__init__.py` de la raíz si no se necesita.
+- Corregir `.gitignore`: cambiar `models/` por `/models/` para que no ignore `server/models/`; añadir `server.log`.
 - Crear `requirements.txt` con las dependencias realmente usadas (fastapi, uvicorn, sqlalchemy).
+- Crear el esqueleto mínimo de `server/`: `__init__.py`, `server/main.py` (app + health check) y `server/database/database.py` con **una sola** definición de engine/`get_db`/`init_db` (SQLite en `data/`), `server/models/base.py`. Imports de paquete normales, sin `importlib`, sin código duplicado.
 - Commitear los cambios pendientes de `README.md`/`AGENTS.md`.
-- Commitear el esqueleto del servidor (sin `data/*.db`, sin `server.log`, sin `__pycache__`).
+- Commitear el esqueleto (sin `data/*.db`, sin `server.log`, sin `__pycache__`).
 
 **Verificador (todos deben pasar):**
 
 ```bash
-git check-ignore server/models/conversation.py   # debe fallar (no ignorado)
+git check-ignore server/models/base.py           # debe fallar (no ignorado)
 python -c "from server.main import app; print('import ok')"
 # comprobar puerto libre antes de arrancar (o reutilizar el servidor si ya responde)
 python -m uvicorn server.main:app --port 8000 &
 curl -s http://localhost:8000/                    # {"status":"ok",...}
-curl -s http://localhost:8000/api/conversations   # [] o JSON válido
-git status --short                                # sin archivos generados
+curl -s -o /dev/null -w "%{http_code}" http://localhost:8000/docs   # 200
+git status --short                                # sin archivos generados (data/, logs, __pycache__)
 git diff HEAD --stat                              # diff revisado: solo cambios del paso
 ```
 
@@ -142,7 +140,7 @@ curl -s http://localhost:8000/api/learners
 
 ```bash
 python -m pytest -q
-# borrado de data/english-tutor.db y recreación para validar migración esquemática
+# borrar la BD local y comprobar que la app la recrea desde cero con el esquem actual
 rm data/english-tutor.db && curl -s http://localhost:8000/db/health
 curl -s "http://localhost:8000/api/conversations?learner_id=1"
 ```
