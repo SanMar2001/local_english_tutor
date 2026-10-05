@@ -1,22 +1,74 @@
 # English Tutor Local AI
 
-> A personal English tutor running 100% locally, with no external AI APIs or monthly costs.
+> A local English tutoring system designed to support multiple learners on the same machine, with independent conversations, assessments, learning goals, and progress.
 
 ## 📋 Description
 
-English Tutor Local AI is a local conversational English tutor designed to help a learner improve their English through written and spoken interaction.
+English Tutor Local AI is a local conversational English tutoring system designed to help one or more learners improve their English through written and spoken interaction.
 
 The application runs entirely on the user's machine and combines:
 
-- Real-time audio communication through WebRTC.
-- Local speech-to-text transcription with Whisper.cpp.
-- A local LLM for pedagogical reasoning and conversation.
-- Persistent learning data.
-- Semantic memory through a local vector database.
+- Conversational interaction with a local LLM.
+- Real-time audio communication.
+- Local speech-to-text transcription.
+- Persistent learner profiles and learning history.
+- Semantic memory.
+- Adaptive assessment.
+- Personalized learning plans.
+- Progress tracking.
 - A React frontend.
 - A FastAPI backend.
 
-The system must remain **fully local at runtime**. No external AI APIs or paid cloud services should be required.
+The system is intended to support multiple learners using the same local installation.
+
+Each learner must have an independent learning profile and independent learning history.
+
+The application must remain **fully local at runtime**. No external AI APIs or paid cloud services should be required.
+
+---
+
+# 👥 Learners
+
+The system must support multiple learners on the same machine.
+
+A learner represents a person using the tutor.
+
+Each learner should eventually have independent:
+
+- Conversations.
+- Messages.
+- Assessments.
+- Current proficiency level.
+- Target proficiency level.
+- Learning goals.
+- Learning plan.
+- Progress.
+- Recurring errors.
+- Vocabulary history.
+- Learning history.
+
+Conceptually:
+
+```text
+                    English Tutor
+                         │
+          ┌──────────────┼──────────────┐
+          │              │              │
+       Learner A      Learner B      Learner C
+          │              │              │
+     Conversations   Conversations   Conversations
+     Assessments     Assessments     Assessments
+     Goals           Goals           Goals
+     Progress        Progress        Progress
+```
+
+The first implementation does **not** require authentication.
+
+User identification may initially be handled through local learner selection.
+
+Authentication, passwords, sessions, OAuth, JWT, or other access-control mechanisms should only be introduced when they become necessary for the application.
+
+Do not implement authentication as part of the initial project foundation.
 
 ---
 
@@ -25,6 +77,10 @@ The system must remain **fully local at runtime**. No external AI APIs or paid c
 The tutor must not assume a predefined English level or learning path.
 
 Instead, the system should first evaluate the learner's current proficiency and then build a personalized learning plan based on the results.
+
+The learning process should be adaptive and learner-specific.
+
+---
 
 ## Initial Assessment
 
@@ -63,7 +119,7 @@ The application must never present its evaluation as an official language certif
 
 ---
 
-## Learning Goal
+# 🎯 Learning Goal
 
 After the initial assessment, the tutor should communicate the estimated level to the learner and ask:
 
@@ -91,9 +147,11 @@ The learner should also be able to define a more specific objective, such as:
 - Travel.
 - General English.
 
+The current level and target should belong to the learner's learning context rather than being treated as global application settings.
+
 ---
 
-## Personalized Learning Plan
+# 📚 Personalized Learning Plan
 
 Once the current and target levels are established, the tutor should generate a personalized learning plan.
 
@@ -123,9 +181,11 @@ The tutor should continuously use the learner's performance to determine whether
 - Introduce a new topic.
 - Reassess the learner's level.
 
+Different learners should be able to have completely different learning plans.
+
 ---
 
-## Progress Reassessment
+# 📈 Progress Reassessment
 
 The tutor should periodically reassess the learner instead of assuming that progress is linear.
 
@@ -149,9 +209,47 @@ Potential metrics include:
 
 These metrics should support the tutor's reasoning but should not be treated as precise measurements of language proficiency.
 
+Progress must be associated with the corresponding learner.
+
 ---
 
-## Long-Term Objective
+# 💬 Conversations
+
+Conversations are part of each learner's history.
+
+A conversation belongs to exactly one learner.
+
+A conversation contains messages exchanged between the learner and the tutor.
+
+Conceptually:
+
+```text
+Learner
+   │
+   ├── Conversation
+   │      ├── Message
+   │      ├── Message
+   │      └── Message
+   │
+   ├── Conversation
+   │      ├── Message
+   │      └── Message
+   │
+   └── ...
+```
+
+Messages should retain enough information to reconstruct the conversational context when required.
+
+The conversation system should eventually support both:
+
+- Text interaction.
+- Spoken interaction.
+
+The initial implementation does not need to support audio.
+
+---
+
+# 🧠 Long-Term Objective
 
 The ultimate objective is to create an **adaptive language-learning system**, rather than a generic conversational chatbot.
 
@@ -167,21 +265,24 @@ What should I work on next?
 Am I actually improving?
 ```
 
-The learning strategy should evolve according to evidence collected from the learner's interactions.
+The system should continuously update the third answer based on evidence from the learner's performance.
+
+Each learner should have their own answer to these questions.
 
 ---
 
-# 🛠 Stack
+# 🛠 Technology Stack
 
 | Layer                  | Technology                      |
 | ---------------------- | ------------------------------- |
 | Backend                | Python 3.11+ + FastAPI          |
+| ORM / Persistence      | SQLAlchemy                      |
+| Database               | SQLite                          |
 | Frontend               | React + Vite + TypeScript       |
 | Audio / Communications | WebRTC + PeerJS                 |
 | Speech-to-Text         | Whisper.cpp + GGUF              |
 | LLM                    | Ollama                          |
 | Vector Database        | ChromaDB                        |
-| Database               | SQLite + SQLAlchemy             |
 | Infrastructure         | Native Windows or WSL2 + Docker |
 
 The exact LLM model may change during development.
@@ -210,40 +311,80 @@ GPU acceleration should be treated as an optimization rather than a hard depende
 
 # 🏗 Architecture
 
+The high-level architecture is:
+
 ```text
-┌─────────────┐
-│   Browser   │
-│ React/Vite  │
-└──────┬──────┘
-       │
-       │ WebRTC / HTTP
-       ▼
-┌──────────────────────────────┐
-│        FastAPI Server        │
-│                              │
-│  API / Audio / Conversation  │
-└──────┬──────────┬────────────┘
+┌─────────────────────────────┐
+│           Browser           │
+│      React / Vite / TS      │
+└──────────────┬──────────────┘
+               │
+               │ HTTP / WebRTC
+               ▼
+┌─────────────────────────────┐
+│        FastAPI Server       │
+│                             │
+│  API / Conversations /      │
+│  Learning / Audio Pipeline  │
+└──────┬──────────┬───────────┘
        │          │
        │          │
        ▼          ▼
 ┌───────────┐  ┌───────────────┐
 │Whisper.cpp│  │    Ollama     │
-│   STT     │  │     LLM       │
+│    STT    │  │      LLM      │
 └───────────┘  └───────┬───────┘
                        │
                        ▼
-               ┌───────────────┐
-               │  Memory Layer │
-               └───────┬───────┘
-                       │
-                ┌──────┴──────┐
-                ▼             ▼
-          ┌──────────┐   ┌──────────┐
-          │  SQLite  │   │ ChromaDB │
-          │ Progress │   │ Semantic │
-          │  Data    │   │  Memory  │
-          └──────────┘   └──────────┘
+              ┌────────────────┐
+              │ Learning Engine│
+              └───────┬────────┘
+                      │
+             ┌────────┴─────────┐
+             ▼                  ▼
+       ┌───────────┐      ┌───────────┐
+       │  SQLite   │      │ ChromaDB  │
+       │ Learners/ │      │ Semantic  │
+       │ Progress  │      │  Memory   │
+       └───────────┘      └───────────┘
 ```
+
+The architecture should evolve as implementation progresses.
+
+The diagram represents the intended system, not a requirement to implement every component immediately.
+
+---
+
+# 🗄️ Data Model Direction
+
+The system should eventually represent relationships similar to:
+
+```text
+User
+ │
+ ├── Conversation
+ │      └── Message
+ │
+ ├── Assessment
+ │
+ ├── LearningGoal
+ │
+ ├── LearningPlan
+ │
+ ├── Progress
+ │
+ ├── ErrorPattern
+ │
+ └── VocabularyHistory
+```
+
+These are conceptual entities.
+
+They do **not** need to be implemented all at once.
+
+The database model should evolve according to actual application requirements.
+
+Do not create speculative tables merely because they appear in this diagram.
 
 ---
 
@@ -258,28 +399,20 @@ english-tutor/
 
 ├── server/
 │   ├── main.py
+│   ├── models/
+│   ├── database/
+│   ├── api/
 │   ├── audio/
-│   │   ├── __init__.py
-│   │   ├── transcriber.py
-│   │   ├── synthesizer.py
-│   │   └── pipeline.py
-│   ├── memory/
-│   │   ├── __init__.py
-│   │   ├── database.py
-│   │   ├── vector_store.py
-│   │   └── schemas.py
 │   ├── llm/
-│   │   ├── __init__.py
-│   │   └── client.py
-│   └── routes/
-│       ├── conversation.py
-│       └── progress.py
+│   ├── learning/
+│   └── memory/
 │
 ├── client/
 │   ├── src/
 │   │   ├── App.tsx
 │   │   ├── components/
-│   │   └── hooks/
+│   │   ├── hooks/
+│   │   └── ...
 │   └── package.json
 │
 ├── data/
@@ -291,7 +424,7 @@ english-tutor/
 └── docker-compose.yml
 ```
 
-This structure is an architectural target, not a requirement to create every file immediately.
+This structure is an architectural target, not a requirement to create every directory immediately.
 
 Do not create empty directories or placeholder files merely to match this structure.
 
@@ -306,19 +439,23 @@ Development must happen incrementally through small, independently understandabl
 Examples:
 
 ```text
-Initialize FastAPI project
+Initialize FastAPI
         ↓
-Configure SQLite
+Configure SQLAlchemy + SQLite
         ↓
-Create database models
+Create learner and conversation models
+        ↓
+Implement basic conversation API
         ↓
 Implement Ollama client
         ↓
 Implement text conversation
         ↓
-Implement learning assessment
+Implement assessment engine
         ↓
-Implement learning plan
+Implement personalized learning plan
+        ↓
+Implement progress tracking
         ↓
 Implement Whisper transcription
         ↓
@@ -348,6 +485,8 @@ The development agent must:
 7. Stop when the task is complete or when continuing would require a significant decision.
 
 The agent must not proactively implement future milestones.
+
+The agent should prefer simple solutions that can evolve later over speculative abstractions.
 
 ---
 
@@ -453,11 +592,12 @@ Do not document irrelevant history.
 At the beginning of a new development session:
 
 1. Read `README.md`.
-2. If `docs/handoff.md` exists, read it.
-3. Inspect the repository state.
-4. Verify that the handoff still describes the actual code.
-5. Resolve discrepancies in favor of the actual repository state.
-6. Continue only from the documented next step.
+2. Read `AGENTS.md`.
+3. If `docs/handoff.md` exists, read it.
+4. Inspect the repository state.
+5. Verify that the handoff still describes the actual code.
+6. Resolve discrepancies in favor of the actual repository state.
+7. Continue only from the documented next step.
 
 Do not blindly trust a previous handoff.
 
@@ -568,6 +708,10 @@ Corrections should prioritize useful feedback over correcting every minor imperf
 
 The learner should be encouraged to communicate naturally rather than being constantly interrupted.
 
+The teaching strategy should adapt to the learner's current level and goals.
+
+Different learners may require different teaching strategies, topics, difficulty, and progression.
+
 ---
 
 # ⚠️ Constraints
@@ -584,6 +728,8 @@ The implementation agent must not:
 - Hide unresolved problems.
 - Claim tests passed when they were not executed.
 - Make major architectural decisions without human approval.
+- Implement authentication merely because multiple learners exist.
+- Create speculative database models solely because they appear in the conceptual architecture.
 
 The objective is not to maximize the amount of code produced in a session.
 
@@ -593,15 +739,26 @@ The objective is to produce **small, correct, verifiable increments that can be 
 
 # 🚀 Starting From This Repository
 
-When the repository contains only this README and the initial project configuration:
+When the repository contains only:
 
-1. Read and understand this README.
-2. Inspect the repository.
-3. Determine the smallest sensible first milestone.
-4. Explain the proposed milestone.
-5. Implement only that milestone.
-6. Verify the implementation.
-7. Stop when the milestone is complete.
-8. Create `docs/handoff.md` if another session is expected to continue the work.
+```text
+README.md
+AGENTS.md
+.gitignore
+```
+
+the agent should:
+
+1. Read and understand `README.md`.
+2. Read and understand `AGENTS.md`.
+3. Inspect the repository.
+4. Determine the smallest sensible first milestone.
+5. Explain the proposed milestone.
+6. Identify any decisions requiring human approval.
+7. Wait for approval.
+8. Implement only the approved milestone.
+9. Verify the implementation.
+10. Stop when the milestone is complete.
+11. Create `docs/handoff.md` only if another session is expected to continue the work.
 
 If the first milestone requires an architectural decision that is not specified here, stop and ask the human before implementing it.
